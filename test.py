@@ -1,4 +1,5 @@
 import unittest
+from asonn import Asonn
 from dataset_loader import DatasetLoader
 
 
@@ -19,6 +20,17 @@ class TestDatasetLoader(unittest.TestCase):
         self.assertEqual(len(iris[1]), 5, "Record length correct")
         self.assertEqual(iris[1][0], "Iris-setosa", "String value correct")
         self.assertEqual(iris[1][1], 5.1, "Numeric value correct")
+
+class TestAGDS(unittest.TestCase):
+    agds = Asonn()
+
+    def test_unique_id(self):
+        self.agds.build_agds_from("datasets/iris.txt")
+        ids = list()
+        for neuron in self.agds.neurons:
+            ids.append(neuron.id)
+
+        self.assertEqual(len(ids), len(set(ids)), "IDs are unique")
 
 
 if __name__ == "__main__":
