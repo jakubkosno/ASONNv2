@@ -12,6 +12,7 @@ class Neuron:
         self.connections = list()
         self.id = next(self._ids)
         self.is_label = is_label
+        self.out_correlation = list()
 
     def is_of_type(self, label):
         if self.is_label:
@@ -101,3 +102,61 @@ class Neuron:
             one_value_same_adef = len([x for x in neuron['neuron'].connections if x['neuron'].is_object() and x['neuron'].get_class() == self.get_class()])
             one_value_adef = len([x for x in neuron['neuron'].connections if x['neuron'].is_object()])
             neuron['weight'] = ((one_value_same_adef / one_value_adef) / denominator)
+
+    def get_value_connections(self):
+        return [x['neuron'] for x in self.connections if x['neuron'].is_value() and x['neuron'].get_type() != "Class"]
+
+    def get_value_connections_with_weights(self):
+        return [x for x in self.connections if x['neuron'].is_value() and x['neuron'].get_type() != "Class"]
+
+    def get_object_connections(self):
+        return [x['neuron'] for x in self.connections if x['neuron'].is_object()]
+
+    def get_out_correlation(self):
+        return self.out_correlation
+
+    def has_bigger_out_correlation(self, other):
+        if len(self.out_correlation) == len(other.get_out_correlation()):
+            for i in range(len(self.out_correlation)):
+                if self.out_correlation[-1 * i] > other.get_out_correlation()[-1 * i]:
+                    return True
+                elif self.out_correlation[-1 * i] < other.get_out_correlation()[-1 * i]:
+                    return False
+                else:
+                    continue
+
+            return True #True if both out_correlations equal
+
+        else:
+            return len(self.out_correlation) > len(other.get_out_correlation())
+
+    def is_pattern(self):
+        return False
+
+    def is_range(self):
+        return False
+
+    def get_label_connection(self):
+        labels = [x['neuron'] for x in self.connections if x['neuron'].is_label]
+        return labels[0]
+
+    def get_asim_connections(self):
+        return [x['neuron'] for x in self.connections if x['neuron'].is_value() and x['neuron'].get_type() == self.get_type()]
+
+    def get_object_type(self):
+        if not self.is_object():
+            return None
+        else:
+            for connection in self.connections:
+                if connection['neuron'].get_type() == "Class":
+                    return connection['neuron'].value
+
+    def get_range(self):
+        if self.is_label:
+            values = [x.value for x in self.get_value_connections()]
+            return max(values) - min(values)
+        else:
+            return 0
+
+    def count_pattern_connections(self):
+        return len([x for x in self.connections if x['neuron'].is_pattern()])
