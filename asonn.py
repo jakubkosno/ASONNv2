@@ -12,7 +12,8 @@ def format_record(record, labels):
 class Asonn:
     def __init__(self) -> None:
         self.neurons = set()
-    
+        self.object_neurons = set()
+
     #AGDS
     def build_agds_from(self, file):
         dataset_loader = DatasetLoader()
@@ -43,7 +44,7 @@ class Asonn:
             if neuron not in self.neurons:
                 value_neurons.add(neuron)
 
-        self.neurons.add(object_neuron)
+        self.object_neurons.add(object_neuron)
         self.neurons.update(value_neurons)
 
     def __get_neuron(self, value, label):
@@ -57,3 +58,40 @@ class Asonn:
         for neuron in self.neurons:
             neuron.remove_duplicated_connections()
 
+    def add_weighted_connections(self):
+        for neuron in self.neurons:
+            neuron.sort_connections()
+            connections_with_weights = list()
+            for connection in neuron.connections:
+                connections_with_weights.append({"weight": 1, "neuron": connection})
+
+            neuron.replace_connections(connections_with_weights)
+
+        for neuron in self.object_neurons:
+            connections_with_weights = list()
+            for connection in neuron.connections:
+                connections_with_weights.append({"weight": 1, "neuron": connection})
+
+            neuron.replace_connections(connections_with_weights)
+
+        self.__add_asim_connections()
+        self.__update_adef_weights()
+
+    def __add_asim_connections(self):
+        for neuron in self.neurons:
+            if neuron.is_label and neuron.value != "Class":
+                for i in range(len(neuron.connections) - 1):
+                    value_range = neuron.connections[len(neuron.connections) -1]["neuron"].value - neuron.connections[0]["neuron"].value
+                    weight = pow(((value_range - (neuron.connections[i + 1]["neuron"].value - neuron.connections[i]["neuron"].value)) / value_range), 1)
+                    neuron.connections[i]["neuron"].add_connection_with_weight(weight, neuron.connections[i + 1]['neuron'])
+                    neuron.connections[i + 1]["neuron"].add_connection_with_weight(weight, neuron.connections[i]['neuron'])
+
+
+    def __update_adef_weights(self):
+        for neuron in self.object_neurons:
+            neuron.calculate_adef_weight()
+
+if __name__ == "__main__":
+    asonn = Asonn()
+    asonn.build_agds_from("datasets/iris.txt")
+    asonn.add_weighted_connections()
