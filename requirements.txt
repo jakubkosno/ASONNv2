@@ -1,1 +1,4 @@
-
+numpy==1.23.5
+pmlb==1.0.1.post3
+scikit_learn==1.2.2
+scipy==1.11.2

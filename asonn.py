@@ -1,3 +1,9 @@
+import csv
+import numpy
+import pmlb
+from scipy.special import softmax
+from sklearn.model_selection import train_test_split
+from statistics import mode
 from dataset_loader import DatasetLoader
 from neuron import Neuron
 from pattern_neuron import PatternNeuron
@@ -10,6 +16,45 @@ def format_record(record, labels):
             formatted.append((labels[i], record[i]))
 
         return formatted
+
+def read_csv(dataset):
+    filename_test  = 'datasets/' + dataset + '/' + dataset + '_test.csv'
+    filename_train  = 'datasets/' + dataset + '/' + dataset + '_train.csv'
+    counter = 0
+    X_test = numpy.array([])
+    y_test = numpy.array([])
+    with open(filename_train, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if counter == 0:
+                counter += 1
+                continue
+            elif counter == 1:
+                X_train = numpy.array(numpy.asarray([row[:-1]], dtype=float))
+                y_train = numpy.array(numpy.asarray([row[-1]], dtype=float))
+            else:
+                X_train = numpy.vstack([X_train, row[:-1]])
+                y_train = numpy.vstack([y_train, row[-1]])
+
+            counter += 1
+    counter = 0
+    with open(filename_test, newline='') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            if counter == 0:
+                counter += 1
+                continue
+            elif counter == 1:
+                X_test = numpy.array(numpy.asarray([row[:-1]], dtype=float))
+                y_test = numpy.array(numpy.asarray([row[-1]], dtype=float))
+            else:
+                X_test = numpy.vstack([X_train, row[:-1]])
+                y_test = numpy.vstack([y_train, row[-1]])
+
+            counter += 1
+
+    return X_train.astype(numpy.float_), y_train.astype(numpy.float_), X_test.astype(numpy.float_), y_test.astype(numpy.float_)
+
 
 class Asonn:
     def __init__(self) -> None:
@@ -33,6 +78,21 @@ class Asonn:
 
         self.__remove_duplicated_connections()
 
+    def build_agds(self, features, labels):
+        label_neurons = list()
+        class_neuron = Neuron('Class', True)
+        label_neurons.append(class_neuron)
+        self.neurons.add(class_neuron)
+        for i in range(len(features[0])):
+            label_neuron = Neuron('label ' + str(i), True)
+            label_neurons.append(label_neuron)
+            self.neurons.add(label_neuron)
+
+        for i in range(len(labels)):
+            self.__insert(format_record(numpy.append(labels[i], features[i]), label_neurons), i+1)
+
+        self.__remove_duplicated_connections()
+
     def __insert(self, record, record_number):
         object_neuron = Neuron("O" + str(record_number))
         value_neurons = set()
@@ -40,10 +100,10 @@ class Asonn:
             neuron = self.__get_neuron(value, type.value)
             neuron.add_connection(object_neuron)
             object_neuron.add_connection(neuron)
-            for label_neuron in self.neurons:
-                if label_neuron.is_of_type(type.value) and label_neuron.is_label:
-                    neuron.add_connection(label_neuron)
-                    label_neuron.add_connection(neuron)
+            for item in self.neurons:
+                if item.is_of_type(type.value) and item.is_label:
+                    neuron.add_connection(item)
+                    item.add_connection(neuron)
 
             if neuron not in self.neurons:
                 value_neurons.add(neuron)
@@ -52,11 +112,18 @@ class Asonn:
         self.neurons.update(value_neurons)
 
     def __get_neuron(self, value, label):
-        for neuron in self.neurons:
-            if str(neuron.value) == str(value) and neuron.is_of_type(label):
-                return neuron
+        try:
+            for neuron in self.neurons:
+                if str(neuron.value) == str(value) and neuron.is_of_type(label):
+                    return neuron
 
-        return Neuron(value)
+            return Neuron(value)
+        except:
+            for neuron in self.neurons:
+                if str(neuron.value) == str(value) and neuron.is_of_type_with_weight(label):
+                    return neuron
+
+            return Neuron(value)
 
     def __remove_duplicated_connections(self):
         for neuron in self.neurons:
@@ -164,9 +231,69 @@ class Asonn:
     def get_attribute_quantity(self):
         return len([x for x in self.neurons if x.is_label])
 
+    def build(self, features, labels):
+        self.build_agds(features, labels)
+        self.add_weighted_connections()
+        self.build_asonn()
+
+    def classify(self, features):
+        self.reset_activations()
+        for i in range(len(features)):
+            self.activate(features[i], i)
+
+        pattern_neurons = list(self.pattern_neurons)
+        softmax_activations = softmax([x.get_activation() for x in pattern_neurons])
+        max_activation = 0
+        max_activated_neuron = list()
+        for i in range(len(pattern_neurons)):
+            if softmax_activations[i] > max_activation:
+                max_activation = softmax_activations[i]
+                max_activated_neuron = [pattern_neurons[i]]
+
+            elif softmax_activations[i] == max_activation:
+                max_activated_neuron.append(pattern_neurons[i])
+
+        if len(max_activated_neuron) < 2:
+            result = max_activated_neuron[0].get_type()
+        else:
+            result = mode([x.get_type() for x in max_activated_neuron])
+
+        return result
+
+    def activate(self, feature, feature_number):
+        for neuron in [x for x in self.range_neurons if x.get_feature_type() == 'label ' + str(feature_number)]:
+            neuron.activate(feature)
+
+    def reset_activations(self):
+        for neuron in self.pattern_neurons:
+            neuron.reset_activation()
+
+    def get_most_activated_neuron(self):
+        activations = sorted(self.pattern_neurons, key=lambda x: x.get_activation(), reverse=True)
+        return activations[0]
+
+    def score(self, dataset, labels):
+        if len(dataset) != len(labels):
+            print("Labels don't fit given dataset")
+            return 0
+
+        if len(dataset) < 1:
+            print("Empty dataset")
+            return 0
+
+        correct = 0
+        all = 0
+        for i in range(len(dataset)):
+            if self.classify(dataset[i]) == labels[i]:
+                correct += 1
+
+            all += 1
+
+        return correct / all
+
 
 if __name__ == "__main__":
     asonn = Asonn()
-    asonn.build_agds_from("datasets/iris.txt")
-    asonn.add_weighted_connections()
-    asonn.build_asonn()
+    X_train, y_train, X_test, y_test = read_csv("iris")
+    asonn.build(X_train, y_train)
+    print("Score: " + str(asonn.score(X_test, y_test)))
